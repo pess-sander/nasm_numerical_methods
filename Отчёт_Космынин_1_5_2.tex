@@ -1,0 +1,238 @@
+\documentclass[a4paper,12pt,titlepage,finall]{article}
+
+\usepackage[russian]{babel}
+\usepackage{geometry}
+\usepackage{multirow}
+\usepackage{indentfirst}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\usepackage[final]{listings}
+
+\pgfplotsset{compat=1.18, width=17cm}
+\usepgfplotslibrary{fillbetween}
+
+\geometry{a4paper,left=30mm,top=30mm,bottom=30mm,right=30mm}
+
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+\lstset{basicstyle=\ttfamily,breaklines=true, numbers=left}
+
+% Титульный лист
+\begin{titlepage}
+    \begin{center}
+    {\small \sc Московский государственный университет \\имени М.~В.~Ломоносова\\ Факультет вычислительной математики и кибернетики\\}
+    \vfill
+    {\large \sc Отчёт по заданию №6}\\~\\
+    {\large \bf <<Сборка многомодульных программ. Вычисление корней уравнений и неопределённых интегралов.>>}\\~\\
+    {\large \bf Вариант 1 / 5 / 2}
+    \end{center}
+
+    \begin{flushright}
+    \vfill
+    {Выполнил:\\студент 105 группы\\Космынин~И.~Н.\\~\\
+    Преподаватели:\\Гуляев~А.~В.\\Русол~А.~В.}
+    \end{flushright}
+
+    \begin{center}
+    \vfill
+    {\small Москва\\2024}
+    \end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Постановка задачи}
+
+Реализовать численный метод, позволяющий вычислить площадь плоской фигуры, ограниченной тремя кривыми, заданными функциями $f_1(x)=2^x+1$, $f_2(x)=x^5$, $f_3(x)=\frac{1-x}{3}$. Для решения этой задачи используется метод трапеций при вычислении определённого интграла и реализуются два метода для приближённого вычисления абсцисс вершин фигуры (корней уравнений): метод хорд и метод деления отрезка пополам. При этом необходимо аналитически определить отрезки, на которых производится поиск корней.\\
+
+Программа должна иметь модуль написанный на языке Ассемблера, вычисляющий значение функций $f_1$, $f_2$ и $f_3$ в вещественных числах при помощи сопроцессора x87. Соответствующие функции реализуются с соглашением \texttt{cdecl} для дальнейшего использования в Си-коде.
+
+\newpage
+
+\section{Математическое обоснование}
+
+Для анализа предложенных функций построен график:
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[name=graph, axis lines=middle, xlabel=x, ylabel=y, xmin=-4, xmax=4, ymin=-2, ymax=5]
+\addplot[color=red,samples=256,thick]{2^x+1};
+\addlegendentry{\(y=2^x+1\)}
+\addplot[color=green, domain=-2:2, samples=256, thick]{x^5};
+\addlegendentry{\(y=x^5\)}
+\addplot[color=blue, samples=256, thick]{(1 - x)/3};
+\addlegendentry{$y=\frac{1-x}{3}$}
+\end{axis}
+\end{tikzpicture}
+\caption{Плоская фигура, ограниченная графикам заданных функций}
+\label{plot1}
+\end{figure}
+
+Для корректного нахождения единственного корня уравнения $F(x)=0$ на заданном отрезке $[a,b]$ методами деления отрезка пополам и хорд необходимо, чтобы функция $F$ удовлетворяла на отрезке следующим свойствам$^\cite{math}$:
+\begin{enumerate}
+    \item $F(a)F(b) < 0$;
+    \item $F$ непрерывно дифференцируема на $[a,b]$;
+    \item $F'$ монотонна и сохраняет знак на $[a,b]$.
+\end{enumerate}
+
+Исходя из этих требований и из графика (рис.~\ref{plot1}) разумно выбрать следующие отрезки для отыскания корней:
+\begin{itemize}
+\item $F(x) = f_1(x) - f_2(x): [1, 2]$ (т.к. $F'(x) = 2^x\ln{2} - 5x^4$ убывает и $>0$);
+\item $F(x) = f_1(x) - f_3(x): [-3, -2]$ (т.к. $F'(x) = 2^x\ln{2} - \frac{1}{3}$ возрастает и $<0$);
+\item $F(x) = f_2(x) - f_3(x): [0.6, 1]$ (т.к. $F'(x) = 5x^4 - \frac{1}{3}$ возрастает и $>0$).
+\end{itemize}
+
+Далее, для вычисления определённого интеграла методом трапеций на отрезке $[a,b]$ с $n$ отрезками разбияния применяется следующая формула: $\int \limits_a^b f(x) \mathrm{d}x = \frac{b-a}{2n} \left( f(a)+f(b)+2\sum \limits_{k=1}^{n-1}f(x_k) \right) + R$, где $|R| = O(\frac{1}{n^2}) \approx \varepsilon_2$. По правилу Рунге для метода трапеций: $\varepsilon_2 \approx \frac{1}{3}(I_{2n} - I_n)$, где $I_n$ - приближённое значение (без остатка) интеграла на отрезке $[a,b]$ с $n$ отрезками разбиения. Для определения площади потребуется вычислить 3 определённых интеграла, так что требуется увеличение точности в 3 раза. Таким образом, достаточно взять значения $\varepsilon_1 = \varepsilon_2 = 0.0001$ при $\varepsilon = 0.001$ (по условию задачи).
+
+\newpage
+
+\section{Результаты экспериментов}
+
+При помощи программы с точность $\varepsilon_1=0.0001$ найдены координаты вершин фигуры, ограниченной графиками заданных функций (таблица~\ref{table1}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+Кривые & $x$ & $y$ \\
+\hline
+1 и 2 & 1.2794 & 3.4274 \\
+1 и 3 & -2.5222 & 1.1741 \\
+2 и 3 & 0.6505 & 0.1165 \\
+\hline
+\end{tabular}
+\caption{Координаты точек пересечения}
+\label{table1}
+\end{table}
+
+Далее, на рис.~\ref{plot2} закрашена нужная фигура и подписана её площадь, вычисленная также при помощи программы.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[name=graph, axis lines=middle, xlabel=x, ylabel=y, xmin=-4, xmax=4, ymin=-2, ymax=5, xticklabels={,,}, yticklabels={,,}]
+\addplot[color=red, samples=256, thick, name path=A]{2^x+1};
+\addlegendentry{\(y=2^x+1\)}
+
+\addplot[color=green, domain=-2:2, samples=256, thick, name path=B]{x^5};
+\addlegendentry{\(y=x^5\)}
+
+\addplot[color=blue, samples=256, thick, name path=C]{(1 - x)/3};
+\addlegendentry{$y=\frac{1-x}{3}$}
+
+\addlegendimage{empty legend}\addlegendentry{}
+
+\addplot[blue!20, samples=256] fill between[of=A and C, soft clip={domain=-2.5222:0.6505}];
+\addplot[blue!20, samples=256] fill between[of=A and B, soft clip={domain=0.6:1.2794}];
+\addlegendentry{$S=4.289$}
+
+\addplot[dashed] coordinates { (-2.5222, 1.1741) (-2.5222, 0) };
+\addplot[color=black] coordinates { (-2.5222, 0) } node [label={-90:{\small -2.5222}}] {};
+
+\addplot[dashed] coordinates { (1.2794, 3.4274) (1.2794, 0) };
+\addplot[color=black] coordinates { (1.2794, 0) } node [label={-90:{\small 1.2794}}] {};
+
+\addplot[dashed] coordinates { (0.6505, 0.1165) (0.6505, 0) };
+\addplot[color=black] coordinates { (0.6505, 0) } node [label={-90:{\small 0.6505}}] {};
+\end{axis}
+\end{tikzpicture}
+\caption{Площадь плоской фигуры, ограниченной графикам заданных функций}
+\label{plot2}
+\end{figure}
+
+\newpage
+
+\section{Структура программы и спецификация функций}
+
+При работе программы используется глобальная константа \texttt{MAX\_STEPS}, задающая максимальное кол-во итераций цикла поиска корня до аварийной остановки. Она нужна, т.к. при неоптимальном выборе отрезка методы поиска корня будут сходиться слишком медленно, из-за чего программа будет нерационально использовать доступные ресурсы. Также в тексте программы определяется глобальная целочисленная переменная \texttt{iter}, в которую сохраняется кол-во итераций, потребовавшееся для последнего вычисления корня.\\
+
+Функции \texttt{f1}, \texttt{f2}, \texttt{f3} для вычисления математических выражений написаны на языке NASM под 32-битную архитектуру и импортируются в Си коде из объектного файла \texttt{funcs.o}.\\
+
+Функция \texttt{main} анализирует параметры командной строки, при необходимости указывает пользователю корректный вариант использования или выводит полную справку. Далее, в зависимости от параметра \texttt{-{}-mode}, возможны 3 варианта работы программы:
+\begin{enumerate}
+\item вызов функции \texttt{root} для вычисления абсцисс вершин плоской фигуры, вызов функции \texttt{integral} для вычисления определённого интеграла на интересующем отрезке под каждой функцией и вывод значения площади;
+\item вызов функции \texttt{root} с пользовательскими параметрами и вывод значения корня или сообщения об ошибке;
+\item вызов функции \texttt{integral} с пользовательскими параметрами и вывод значения определённого интеграла.
+\end{enumerate}
+
+Полный список используемых функций:
+\begin{itemize}
+\item \texttt{double root(double (*f)(double), double (*g)(double), double a, double b, double eps1)} вычисляет корень уравнения $f(x) - g(x) = 0$ на отрезке $[a,b]$ с точностью \texttt{eps1} методом хорд или деления отрезка пополам (выбор метода осуществляется на этапе компиляции);
+\item \texttt{double integral(double (*f)(double), double a, double b, double eps2)} вычисляет $\int \limits_a^b f(x) \mathrm{d}x$ с точность \texttt{eps2} методом трапеций;
+\item \texttt{double area(int flag\_inter, flag\_iter, double eps)} вычисляет площадь фигуры, ограниченной кривыми, заданными функциями $f_1$, $f_2$, $f_3$, с точность \texttt{eps}. Флаги \texttt{flag\_inter} и \texttt{flag\_iter} показывают, нужно ли выводить абсциссы вершин фигуры и кол-во итераций, потребовавшихся для их нахождения, соответственно;
+\item \texttt{void print\_usage(char *arg)} выводит справку о вариантах использования программы, параметр \texttt{arg} отвечает за название исполняемого файла;
+\item \texttt{void print\_help(char *arg)} выводит полную справку по программе, параметр \texttt{arg} отвечает за название исполняемого файла.
+\end{itemize}
+
+\newpage
+
+\section{Сборка программы (Make-файл)}
+
+Makefile содержит следующие основные цели:
+\begin{enumerate}
+\item \texttt{all} - сборка программы;
+\item \texttt{clean} - удаление всех объектных и исполняемого файлов;
+\item \texttt{arc} - создания zip-архива со всеми файлами проекта.
+\end{enumerate}
+
+По заданию требуется реализовать методы хорд и деления отрезка пополам для поиска корня уравнения на заданном отрезке. Выбор метода решения определяется на этапе компиляции при помощи флага \texttt{-D}. Makefile предоставляет пользователю возможность выбора при помощи переменной \texttt{method}. При значении \texttt{SECANTS} используется метод хорд, а при значении \texttt{SEGMENTS} --- метод деления отрезка пополам (он же применяется и при неправильном значении переменной \texttt{method}).\\
+
+\begin{lstlisting}[language=make, caption={Текст Makefile}, captionpos=b]
+.PHONY all clean arc
+
+all: main.o funcs.o main_prog
+
+funcs.o:
+    nasm -f elf32 funcs.asm -o funcs.o
+
+main.o:
+    gcc -m32 -c main.c -o main.o -D $(method)
+
+main_prog:
+    gcc -m32 -lm main.o funcs.o -o main_prog
+
+clean:
+    rm *.o main_prog
+
+arc:
+    mkdir -p ARC
+    zip `date +%Y.%m.%d_%N`.zip main_prog main.c Makefile funcs.asm
+    mv *.zip ARC/
+\end{lstlisting}
+
+\newpage
+
+\section{Отладка программы, тестирование функций}
+
+Для тестирования и отладки основного модуля на языке Си заданы специальные режимы работы программы (только решение уравнения или только вычисление интеграла), которые задаются при помощи параметра \texttt{-{}-mode}. В ходе тестирования полученные программой значения сравнивались с ответами Wolfram Mathematica.\\
+
+Отладка функций, написанных на языке Ассемблера производилась при помощи инструментов SASM. В частности, велось наблюдение за значениями регистров сопроцессора x87.
+
+\newpage
+
+\section{Программа на Си и на Ассемблере}
+
+Полный код программы, включащий в себя модули на языках Си и Ассембелер, а также Makefile, приложен к отчёту и находится в том же архиве. Си код содержится в файле \texttt{main.c}, реализация математических функций на языке Ассемблера --- в файле \texttt{funcs.asm}.
+
+\newpage
+
+\section{Анализ допущенных ошибок}
+
+При написании модуля на языке Ассемблера сначала были допущены ошибки, связанные с вычислением $2^x$, а также с тем, что возвращаемое значение сохранялось в регистре \texttt{eax}, а не в \texttt{st0}.\\
+
+Кроме того, изначально функция \texttt{root} не учитывала характер выпуклости функции $\varphi = f - g$, из-за чего могла уйти в бесконечный цикл.
+
+\newpage
+
+\begin{raggedright}
+\addcontentsline{toc}{section}{Список цитируемой литературы}
+\begin{thebibliography}{99}
+\bibitem{math} Ильин~В.\,А., Садовничий~В.\,А., Сендов~Бл.\,Х. Математический анализ. Т.\,1~---
+    Москва: Наука, 1985.
+\end{thebibliography}
+\end{raggedright}
+
+\end{document}
